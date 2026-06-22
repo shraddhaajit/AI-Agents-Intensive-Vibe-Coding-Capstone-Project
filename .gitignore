@@ -1,0 +1,11 @@
+# Ignore environment files
+.env
+# Ignore runtime logs
+logs/
+__pycache__/
+*.pyc
+*.pyo
+.adk/
+*.db
+agents/finops_agent/templates/
+agents/finops_agent/webauthn_server.py
