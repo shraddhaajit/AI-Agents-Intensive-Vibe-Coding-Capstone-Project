@@ -9,3 +9,5 @@ __pycache__/
 *.db
 agents/finops_agent/templates/
 agents/finops_agent/webauthn_server.py
+rival/rival_agent/.env
+
