@@ -2,7 +2,7 @@ def check_pit_rule(lap: int, tire_wear: float, recommendation: dict) -> str:
     if lap > 10 and tire_wear > 0.85:
         if recommendation.get("crossover_in_laps", 99) <= 2:
             return "PASS"
-        return "FAIL - High tire wear requires immediate pit"
+        return "FAIL"
     return "PASS"
 
 def check_rain_safety_car_rule(rain_chance: float, safety_car_active: bool, recommendation: dict) -> str:

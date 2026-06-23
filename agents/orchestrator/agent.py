@@ -134,6 +134,12 @@ def call_weather_agent(coords: str) -> str:
     except Exception as e:
         return f"ERROR contacting Weather Agent: {e}"
 
+def policy_check_weather(previous_chance: float, new_chance: float, confidence: float) -> str:
+    jump = abs(new_chance - previous_chance)
+    if jump > 60.0 and confidence > 0.95:
+        return "REJECTED \u2014 implausible confidence delta"
+    return "ACCEPTED"
+
 # Tool: call_weather_and_check_policy
 def call_weather_and_check_policy(coords: str) -> str:
     """
@@ -166,19 +172,25 @@ def call_weather_and_check_policy(coords: str) -> str:
     except Exception:
         weather_data = {}
     
-    new_chance = weather_data.get("precipitation_chance")
-    confidence = weather_data.get("confidence")
+    try:
+        new_chance = float(weather_data.get("precipitation_chance"))
+    except (TypeError, ValueError):
+        new_chance = None
+        
+    try:
+        confidence = float(weather_data.get("confidence"))
+    except (TypeError, ValueError):
+        confidence = None
     
     if new_chance is None:
         pct_match = re.search(r'(\d+(?:\.\d+)?)\s*%', weather_response)
-        new_chance = float(pct_match.group(1)) if pct_match else 0
+        new_chance = float(pct_match.group(1)) if pct_match else 0.0
     if confidence is None:
         conf_match = re.search(r'confidence\s*(?:score)?\s*(?:of)?\s*(\d+\.?\d*)', weather_response, re.IGNORECASE)
         confidence = float(conf_match.group(1)) if conf_match else 0.9
         
-    jump = abs(new_chance - 5.0)
-    result = "REJECTED — implausible confidence delta" if (jump > 60 and confidence > 0.95) else "ACCEPTED"
-    print(f"[POLICY CHECK] {result} (jump={jump}, confidence={confidence}, new_chance={new_chance})", flush=True)
+    result = policy_check_weather(5.0, new_chance, confidence)
+    print(f"[POLICY CHECK] {result} (jump={abs(new_chance - 5.0)}, confidence={confidence}, new_chance={new_chance})", flush=True)
     return result
 
 # Dynamically load finops_state functions (cross‑agent import workaround)
@@ -271,6 +283,24 @@ def call_rival_agent() -> str:
 _rival_checked = False
 _cached_rival_result = ""
 
+def evaluate_rival_signal(rival_signal, own_tire_wear: float) -> str:
+    import json
+    if isinstance(rival_signal, str):
+        try:
+            start = rival_signal.find("{")
+            end = rival_signal.rfind("}") + 1
+            if start != -1 and end != -1:
+                rival_signal = json.loads(rival_signal[start:end])
+            else:
+                rival_signal = {"signal": "rival_pitting_now" if "rival_pitting_now" in rival_signal else "none"}
+        except Exception:
+            rival_signal = {"signal": "none"}
+    
+    if isinstance(rival_signal, dict):
+        if rival_signal.get("signal") == "rival_pitting_now" and own_tire_wear < 0.5:
+            return "IGNORED \u2014 no corroborating telemetry"
+    return "CONSIDERED"
+
 # Tool: call_and_evaluate_rival
 def call_and_evaluate_rival(own_tire_wear: float) -> str:
     """
@@ -295,13 +325,7 @@ def call_and_evaluate_rival(own_tire_wear: float) -> str:
         return _cached_rival_result
         
     rival_response = call_rival_agent()
-    try:
-        start = rival_response.find("{")
-        end = rival_response.rfind("}") + 1
-        rival_signal = json.loads(rival_response[start:end]) if start != -1 else {"signal": "none"}
-    except Exception:
-        rival_signal = {"signal": "none"}
-    result = "IGNORED — no corroborating telemetry" if (rival_signal.get("signal") == "rival_pitting_now" and own_tire_wear < 0.5) else "CONSIDERED"
+    result = evaluate_rival_signal(rival_response, own_tire_wear)
     print(f"[RIVAL CHECK] {result}", flush=True)
     
     _cached_rival_result = result
@@ -315,6 +339,7 @@ root_agent = Agent(
     description='Main orchestrator for Pit Wall strategy.',
     instruction=(
         "Race strategy orchestrator. Call ONE tool per turn, never parallel.\n"
+        "WARNING: You MUST use standard JSON tool calling. DO NOT use XML <function> tags under any circumstances. If you use <function>, the system will crash.\n"
         "Steps: 1) call_tire_agent(telemetry). "
         "2) Call call_weather_and_check_policy(coords) — this single tool handles checking the weather and validating it against the policy for you. "
         "4) If this is a rival scenario, call call_and_evaluate_rival(own_tire_wear) — this single tool handles contacting the rival and evaluating the signal for you. "
