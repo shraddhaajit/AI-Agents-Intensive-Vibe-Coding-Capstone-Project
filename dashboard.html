@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pit Wall Dashboard</title>
+    <style>
+        body {
+            background-color: #000000;
+            background-image: 
+                linear-gradient(rgba(0, 255, 204, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 204, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+        .title-area {
+            display: flex;
+            flex-direction: column;
+        }
+        .main-title {
+            font-style: italic;
+            font-size: 2.5em;
+            color: #ffffff;
+            margin: 0;
+            letter-spacing: 1px;
+            text-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+        }
+        .clock {
+            font-size: 1.5em;
+            color: #888;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            flex-grow: 1;
+        }
+        .box {
+            border: 1px solid #222;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(4px);
+            border-radius: 0;
+        }
+        .box.wide {
+            grid-column: span 2;
+        }
+        .label {
+            font-size: 1.2em;
+            color: #888;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+        .value {
+            font-size: 2.5em;
+            font-family: 'Garamond', 'Times New Roman', serif;
+            font-weight: bold;
+            color: #fff;
+        }
+        .pass {
+            color: #00ffcc;
+        }
+        .fail, .warning {
+            color: #ff0033;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="title-area" style="display: flex; flex-direction: row; align-items: baseline; gap: 20px;">
+            <div class="main-title">Pit Wall</div>
+            <div class="clock" id="clock">00:00:00</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="box">
+            <div class="label">Active Scenario</div>
+            <div class="value" id="scenario">WAITING...</div>
+        </div>
+        <div class="box">
+            <div class="label">Orchestrator Rec</div>
+            <div class="value" id="recommendation">--</div>
+        </div>
+        <div class="box">
+            <div class="label">Tire Wear</div>
+            <div class="value" id="tire_wear">--</div>
+        </div>
+        <div class="box">
+            <div class="label">Precip Chance</div>
+            <div class="value" id="precip">--</div>
+        </div>
+        <div class="box wide">
+            <div class="label">Rulebook Verdict</div>
+            <div class="value" id="verdict">WAITING...</div>
+        </div>
+    </div>
+
+<script>
+    // Live session clock
+    function updateClock() {
+        const now = new Date();
+        const hrs = String(now.getHours()).padStart(2, '0');
+        const mins = String(now.getMinutes()).padStart(2, '0');
+        const secs = String(now.getSeconds()).padStart(2, '0');
+        document.getElementById('clock').textContent = hrs + ':' + mins + ':' + secs;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Data polling
+    async function fetchData() {
+        try {
+            // cache busting to ensure we get live file updates
+            const response = await fetch('pit_wall_state.json?t=' + new Date().getTime());
+            if (!response.ok) return;
+            const data = await response.json();
+            
+            document.getElementById('scenario').textContent = data.scenario.toUpperCase();
+            document.getElementById('recommendation').textContent = data.orchestrator_recommendation.toUpperCase();
+            
+            const tireEl = document.getElementById('tire_wear');
+            tireEl.textContent = (data.tire_wear * 100).toFixed(0) + "%";
+            if (data.tire_wear > 0.7) {
+                tireEl.className = "value warning";
+            } else {
+                tireEl.className = "value pass";
+            }
+            
+            const precipEl = document.getElementById('precip');
+            precipEl.textContent = data.precipitation_chance + "%";
+            if (data.precipitation_chance > 50) {
+                precipEl.className = "value warning";
+            } else {
+                precipEl.className = "value pass";
+            }
+            
+            const verdictEl = document.getElementById('verdict');
+            verdictEl.textContent = data.rulebook_verdict;
+            if (data.rulebook_verdict.startsWith("PASS")) {
+                verdictEl.className = "value pass";
+            } else {
+                verdictEl.className = "value fail";
+            }
+            
+        } catch (e) {
+            console.log("Waiting for data...");
+        }
+    }
+    
+    setInterval(fetchData, 2000);
+    fetchData();
+</script>
+</body>
+</html>

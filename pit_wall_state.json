@@ -1,0 +1,1 @@
+{"scenario": "violation", "orchestrator_recommendation": "stay_out", "tire_wear": 0.95, "precipitation_chance": 2.0, "rulebook_verdict": "FAIL - High tire wear requires immediate pit"}

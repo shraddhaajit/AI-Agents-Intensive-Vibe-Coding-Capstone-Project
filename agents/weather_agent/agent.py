@@ -26,6 +26,12 @@ def get_precipitation(lat: float, lon: float) -> dict:
             "precipitation_chance": 100,
             "confidence": 0.99
         }
+    if str(os.environ.get("WEATHER_FEED_STORM", "")).strip() == "1":
+        return {
+            "short_forecast": "Heavy rain moving in",
+            "precipitation_chance": 100,
+            "confidence": 0.9
+        }
 
     headers = {"User-Agent": "pit-wall (capstone-project)"}
     # Step 1 – get the forecast endpoint for the given lat/lon
