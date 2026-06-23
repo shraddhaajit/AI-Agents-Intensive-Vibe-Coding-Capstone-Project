@@ -1,58 +1,89 @@
-# Pit Wall Project
+# Pit Wall: AI-Agents Intensive Vibe Coding Capstone
 
-## Overview
+## The Problem
+In high-stakes environments like Formula 1, race strategy requires the split-second synthesis of multiple complex datastreams—tire degradation, weather forecasts, and rival team maneuvers. A human team ("the pit wall") must process all this data while adhering to strict deterministic rules (e.g., minimum tire wear requirements before pitting) and managing the cost of compute resources. 
 
-This repository implements a **Pit Wall** decision‑making system for a racing simulation. Agents communicate via the Google ADK framework:
+## The Solution
+**Pit Wall** is a multi-agent AI system built using the Google ADK. It demonstrates a robust, agentic architecture that seamlessly blends LLM orchestration with deterministic safety guardrails. The system routes telemetry, delegates specialized tasks to local sub-agents, intercepts rival data, and enforces strict human-in-the-loop policies before executing expensive operations.
 
-- **Tire Agent** – evaluates tire wear and suggests a pit window.
-- **Weather Agent** – fetches a short‑term weather forecast from the NOAA MCP server.
-- **FinOps Agent** – prices compute bursts and enforces a spend‑mandate, gating actions behind a WebAuthn MFA approval step.
-- **Orchestrator** – orchestrates the above agents to produce a final pit‑strategy JSON.
+## Architecture
 
-The project is deliberately lightweight: pure **Python** with the ADK, no additional web frameworks.
+```text
+                        +-------------------+
+                        |                   |
+                        |   Orchestrator    |
+                        |      Agent        |
+                        |                   |
+                        +---------+---------+
+                                  |
+        +-------------------------+-------------------------+
+        |                         |                         |
+        v                         v                         v
++-------+-------+         +-------+-------+         +-------+-------+
+|               |         |               |         |               |
+|  Tire Agent   |         | Weather Agent |         |  Rival Agent  |
+|               |         |               |         |               |
++-------+-------+         +-------+-------+         +-------+-------+
+        |                         |                         |
+        v                         v                         v
++-------+-------+         +-------+-------+         +-------+-------+
+|               |         |               |         |               |
+| Rulebook Gate |         |  Policy Gate  |         |  Bluff Gate   |
+| (Local Code)  |         | (Local Code)  |         | (Local Code)  |
++-------+-------+         +-------+-------+         +-------+-------+
+                                  |
+                          +-------+-------+
+                          |               |
+                          | FinOps Agent  |
+                          | (Human Auth)  |
+                          +---------------+
+```
 
----
+## Setup Instructions
 
-## Quick Setup
+1. **Prerequisites**: Ensure you have Python 3.10+ installed and a Groq API key (`GROQ_API_KEY`).
+2. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/shraddhaajit/AI-Agents-Intensive-Vibe-Coding-Capstone-Project.git
+   cd pit-wall
+   ```
+3. **Environment Setup**:
+   ```bash
+   # Create and activate a virtual environment
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
 
+   # Install dependencies
+   pip install -r requirements.txt
+   
+   # Set your API Key
+   export GROQ_API_KEY="your_api_key_here" # On Windows: set GROQ_API_KEY="your_api_key_here"
+   ```
+
+## Running the Scenarios
+
+The system is tested through a centralized harness (`run_lap.py`) that locally spins up the required API servers on ports 8001, 8002, and 9001.
+
+### 1. Baseline
+Runs a standard simulation. The orchestrator queries the tire agent and weather agent, requests compute spend approval, and recommends a strategy.
 ```bash
-# Verify ADK is installed
-adk --version
-
-# (Optional) Create a virtualenv
-python -m venv .venv && .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
+python run_lap.py --scenario baseline
 ```
 
-## Day 1 Verification Table
-The full verification steps are described in the `implementation_plan.md` artifact. Run each command in the terminal and watch the live output – **do not rely on summaries**.
-
----
-
-## Project Layout
+### 2. Violation
+Tests the deterministic **Rulebook Gate**. The LLM is tricked into recommending a dangerous strategy (staying out on 95% tire wear). The rulebook catches the violation and safely overrides the decision to `pit_now`.
+```bash
+python run_lap.py --scenario violation
 ```
-.
-├─ .env                # **YOUR** live API key (ignored by git)
-├─ .env.example        # Placeholder for sharing
-├─ .gitignore          # Standard Python ignores + .env, logs/
-├─ README.md           # This file
-├─ agents/            
-│   ├─ finops_agent/   # FinOps logic & MFA
-│   ├─ orchestrator/   # Core orchestrator
-│   ├─ tire_agent/     # Tire evaluation
-│   └─ weather_agent/  # Weather forecast
-├─ logs/               # Runtime logs, MFA flag, spend state
-├─ run_lap.py          # End‑to‑end driver script
-└─ tests/             # Unit tests (not required for Day 1)
+
+### 3. Bluff
+Tests the **Rival Agent**. The orchestrator intercepts a rival team's radio transmission and calls the Rival Agent to classify it. The Rival Agent correctly identifies the radio message as a "bluff" and advises ignoring it.
+```bash
+python run_lap.py --scenario bluff
 ```
----
 
-## MFA Flow
-When the FinOps agent needs approval it will **auto‑open** the approval URL in your default browser. You must complete the biometric prompt manually. The script will then resume once the correct token is written to `logs/mfa_approved.flag`.
-
----
-
-## License
-This is a demo project – feel free to modify and experiment.
+### 4. Poisoned Feed
+Tests the **Policy Gate**. A rogue weather MCP server is spun up, claiming a 100% chance of sudden rain. The orchestrator passes the data through a programmatic policy check, which spots the impossible delta from the baseline and safely rejects the poisoned data.
+```bash
+python run_lap.py --scenario poisoned_feed
+```

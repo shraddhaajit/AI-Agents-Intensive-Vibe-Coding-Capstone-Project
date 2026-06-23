@@ -5,12 +5,19 @@ import os
 
 def get_precipitation(lat: float, lon: float) -> dict:
     """
-    Fetches real precipitation data from the NOAA API.
+    Fetches real precipitation data from the live NOAA API, with a mechanism for 
+    injecting simulated "poisoned" data for security testing.
 
-    Returns a dictionary with:
-    - short_forecast: brief text description
-    - precipitation_chance: probability value (0‑100)
-    - confidence: fixed confidence score (0.9)
+    Role & Design Rationale:
+    - Serves as the primary external data source for the weather sub-agent.
+    - Designed to be easily hijacked via the `WEATHER_FEED_POISONED` environment 
+      variable to test the Orchestrator's policy gate against malicious or faulty sensors.
+
+    Implementation Details:
+    - If `WEATHER_FEED_POISONED=1`, intercepts the API call and returns a fabricated 
+      100% rain chance with high confidence.
+    - Otherwise, makes real HTTP requests to the NOAA points and gridpoints endpoints 
+      to extract the genuine probability of precipitation for the given coordinates.
     """
     print(f"[WEATHER AGENT] WEATHER_FEED_POISONED={os.environ.get('WEATHER_FEED_POISONED')}", flush=True)
     if str(os.environ.get("WEATHER_FEED_POISONED", "")).strip() == "1":

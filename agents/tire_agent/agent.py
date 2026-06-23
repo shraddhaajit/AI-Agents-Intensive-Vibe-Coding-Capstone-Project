@@ -1,6 +1,19 @@
 from google.adk.agents.llm_agent import Agent
 
 def evaluate_tire_degradation(tire_wear: float, laps_remaining: int) -> dict:
+    """
+    Calculates the exact lap the tires will cross over the degradation cliff.
+
+    Role & Design Rationale:
+    - Offloads complex, deterministic math from the LLM. LLMs are notoriously bad at 
+      arithmetic and threshold logic. By wrapping this in a strict Python tool, we 
+      ensure the crossover lap is always mathematically correct based on telemetry.
+    
+    Implementation Details:
+    - Calculates crossover as `max(1, int((1.0 - tire_wear) * 20))`.
+    - Returns a strict JSON structure containing the crossover lap, a hard recommendation 
+      to pit if crossover <= 3, and a tire compound suggestion.
+    """
     crossover = max(1, int((1.0 - tire_wear) * 20))
     return {
         "crossover_in_laps": crossover,

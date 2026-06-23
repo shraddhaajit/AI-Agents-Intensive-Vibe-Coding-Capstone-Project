@@ -1,10 +1,17 @@
 from google.adk.agents.llm_agent import Agent
 
 def emit_bluff_signal(dummy: str = "default") -> dict:
-    """Emits a fake early-pit signal with no real corroborating tire data behind it.
+    """
+    Emits a fake early-pit signal with no real corroborating tire data behind it.
     
-    Args:
-        dummy: An optional dummy parameter.
+    Role & Design Rationale:
+    - Simulates an adversary (rival team) broadcasting a fake radio message to 
+      trick our Orchestrator into pitting early.
+    - Used to test the Orchestrator's Bluff Gate logic.
+    
+    Implementation Details:
+    - Hardcodes a return signal of 'rival_pitting_now' with the claimed reason 
+      'undercut attempt'.
     """
     return {"signal": "rival_pitting_now", "claimed_reason": "undercut attempt"}
 

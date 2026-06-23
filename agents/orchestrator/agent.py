@@ -49,7 +49,20 @@ def _extract_content(response_text: str) -> str:
 
 # Tool: call_tire_agent
 def call_tire_agent(telemetry: str) -> str:
-    """Create a session for the Tire Agent and send the telemetry message."""
+    """
+    Delegates tire degradation calculations to the specialized Tire Agent.
+
+    Role & Design Rationale:
+    - Centralizes tire telemetry processing so the Orchestrator doesn't need to hold 
+      complex math or specific tire compound rules in its prompt.
+    - Implements a mandatory rate-limit cooldown to prevent overwhelming the free tier 
+      LLM endpoints (e.g., Groq 6K TPM limits) during cross-agent communication.
+
+    Implementation Details:
+    - Issues an HTTP POST to the local Tire Agent API server on port 8001.
+    - Uses `_post_with_retry` to handle transient network errors or LLM timeouts.
+    - Extracts the pure text or function call result from the agent's nested JSON response.
+    """
     time.sleep(15)  # Rate-limit cooldown for Groq free tier (6K TPM)
     try:
         user_id = "pit-wall-user"
@@ -123,7 +136,26 @@ def call_weather_agent(coords: str) -> str:
 
 # Tool: call_weather_and_check_policy
 def call_weather_and_check_policy(coords: str) -> str:
-    """Calls the weather agent, extracts real values, and checks policy — all in code, no LLM relay."""
+    """
+    Acts as the strict Policy Gate for the orchestrator, mitigating LLM data-passing 
+    hallucinations by handling weather data fetching and validation entirely in deterministic Python.
+
+    Role & Design Rationale:
+    - Initially, the Orchestrator LLM was tasked with calling the weather agent, extracting the 
+      precipitation chance/confidence from the resulting JSON, and passing those values to a 
+      separate policy checking tool. 
+    - This architecture repeatedly failed because the LLM would hallucinate arguments, drop 
+      decimal places, or fail to parse prose.
+    - This wrapper solves that structural flaw by combining both steps. The orchestrator 
+      only calls this single tool, completely removing the LLM from the data-relay loop.
+
+    Implementation Details:
+    - Calls `call_weather_agent` directly via HTTP to get the raw NOAA (or poisoned) feed.
+    - Attempts strict JSON parsing first.
+    - Implements a regex fallback mechanism in case the sub-agent LLM wraps the JSON in conversational prose.
+    - Enforces the programmatic policy rule: if the precipitation chance jumps drastically (>60%) 
+      with high confidence (>0.95), it safely rejects the data as a likely "poisoned" feed.
+    """
     import re
     weather_response = call_weather_agent(coords)
     print(f"[DEBUG] raw weather_response: {weather_response!r}", flush=True)
@@ -164,13 +196,22 @@ _approval_requested = False
 _COST_PER_INSTANCE_SECOND = 0.004
 
 def request_compute_spend(instance_count: int, seconds: int, reason: str) -> str:
-    """Request compute spend approval using a SINGLE pricing result for all downstream uses.
+    """
+    Acts as the strict FinOps Gate, enforcing a human-in-the-loop approval process 
+    before any expensive strategy simulations are authorized.
 
-    Cost is computed once and that exact value is used for:
-    - The Vibe Diff display
-    - The approval prompt
-    - The spend_state recording
-    No divergence is possible.
+    Role & Design Rationale:
+    - Demonstrates how to bound LLM autonomy by injecting mandatory human oversight 
+      for financial or high-risk operations. 
+    - Ensures that the cost is calculated deterministically exactly once, eliminating 
+      the risk of the LLM hallucinating different prices across the prompt, the UI, 
+      and the ledger.
+
+    Implementation Details:
+    - Halts execution to prompt the human operator via standard input.
+    - Only proceeds if the human types 'approve'.
+    - Checks the requested spend against a hardcoded mandate cap using `finops_state`.
+    - If approved, records the spend to prevent future requests from exceeding the budget.
     """
     global _approval_requested
     if _approval_requested:
@@ -232,7 +273,23 @@ _cached_rival_result = ""
 
 # Tool: call_and_evaluate_rival
 def call_and_evaluate_rival(own_tire_wear: float) -> str:
-    """Calls the rival agent, extracts its real signal, and evaluates it — all in code, no LLM relay."""
+    """
+    Acts as the Bluff Gate, checking intercepted rival radio signals against our own 
+    telemetry to prevent the AI from falling for opponent deception.
+
+    Role & Design Rationale:
+    - Similar to the weather policy gate, this wrapper prevents the orchestrator from 
+      taking a rival's "pitting now" radio message at face value.
+    - By evaluating the rival's signal against our own deterministic tire wear in code, 
+      we enforce a strategic rule: "Do not react to a rival undercut attempt if our 
+      own tires are still fresh."
+
+    Implementation Details:
+    - Uses a module-level global flag (`_rival_checked`) to ensure the LLM can only 
+      trigger this network call once per run, preventing infinite retry loops.
+    - Calls the local Rival Agent on port 9001 to get the simulated rival signal.
+    - Returns 'IGNORED' if the rival claims to pit but our own wear is < 0.5.
+    """
     global _rival_checked, _cached_rival_result
     if _rival_checked:
         return _cached_rival_result

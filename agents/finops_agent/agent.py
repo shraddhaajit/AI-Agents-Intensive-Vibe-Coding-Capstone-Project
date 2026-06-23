@@ -7,10 +7,31 @@ import secrets
 import urllib.parse
 
 def price_compute_burst(instance_count: int, seconds: int) -> dict:
+    """
+    Calculates the estimated cost for a requested compute burst.
+
+    Role & Design Rationale:
+    - Provides a deterministic pricing calculator for the FinOps sub-agent.
+    - Ensures that pricing logic is centralized and not hallucinated by the LLM.
+
+    Implementation Details:
+    - Multiplies instance count by seconds by a fixed cost per second ($0.004).
+    """
     cost = round(instance_count * seconds * 0.004, 2)
     return {"estimated_cost_usd": cost}
 
 def request_approval(amount: float, reason: str) -> str:
+    """
+    Enforces human-in-the-loop authorization for financial spend.
+
+    Role & Design Rationale:
+    - Prevents autonomous agents from incurring unbounded cloud costs.
+    - Validates the requested amount against the global mandate cap.
+
+    Implementation Details:
+    - Blocks execution to await human terminal input ('approve').
+    - If approved, permanently records the spend to the local state file.
+    """
     if would_exceed_mandate(amount):
         return json.dumps({"status": "REJECTED - Exceeds mandate cap"})
     
